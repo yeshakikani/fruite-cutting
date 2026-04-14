@@ -1,0 +1,16 @@
+{
+  "name": "Fruit Cutting - Ultimate Slicing Game",
+  "short_name": "FruitNinja",
+  "description": "Slice fruits, dodge bombs and reach the high score!",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2b1a0a",
+  "theme_color": "#2b1a0a",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
