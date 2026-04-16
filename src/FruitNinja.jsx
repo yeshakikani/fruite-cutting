@@ -51,6 +51,9 @@ export default function FruitNinja() {
     bladeAngle: -Math.PI / 4,
     bgCacheCanvas: null,
     bgCacheDirty: true,
+    shake: 0,
+    shockwaves: [],
+    flashAlpha: 0,
   });
 
   const [uiState, setUiState] = useState({
@@ -106,18 +109,26 @@ export default function FruitNinja() {
 
   const emitBomb = useCallback((x, y) => {
     const s = stateRef.current;
-    const count = Math.min(16, 150 - s.particles.length);
+    
+    // UNIQUE ANIMATION TRIGGER
+    s.shake = 25; // Dramatic screen shake
+    s.flashAlpha = 0.7; // Screen flash
+    s.shockwaves.push({ x, y, r: 10, a: 1 }); // Expansion shockwave
+
+    // Explosion Particles (Embers & Sparks)
+    const count = 35;
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
-      const sp = 4 + Math.random() * 10;
+      const sp = 3 + Math.random() * 12;
       s.particles.push({
         x, y,
         vx: Math.cos(a) * sp,
         vy: Math.sin(a) * sp,
-        r: 3 + Math.random() * 8,
-        color: Math.random() < 0.5 ? "#ff5500" : "#ffdd00",
+        r: 2 + Math.random() * 8,
+        color: ["#FF4500", "#FFD700", "#FFFFFF", "#FF8C00"][Math.floor(Math.random() * 4)],
         alpha: 1,
-        life: 1 + Math.random() * 0.5,
+        life: 0.8 + Math.random() * 1.2,
+        isSpark: Math.random() > 0.5
       });
     }
   }, []);
@@ -151,49 +162,53 @@ export default function FruitNinja() {
   const checkSlice = useCallback((mx, my, px, py) => {
     const s = stateRef.current;
     if (!s.mouseDown || px < 0) return;
-    const swipeDist = Math.sqrt((mx - px) ** 2 + (my - py) ** 2);
-    if (swipeDist < 2) return;
+    // Removed minimum swipe distance requirement to allow cutting on any touch
+    // as requested by the user.
 
-    // Blade direction (swipe vector)
-    const bladeDirX = (mx - px) / swipeDist;
-    const bladeDirY = (my - py) / swipeDist;
+    // Get current blade direction (approximate from saved angle)
+    const A = s.bladeAngle;
+    const sinA = Math.sin(A);
+    const cosA = Math.cos(A);
+    
+    // Knife blade segment from hilt (mouse) to point at tip (length ~110)
+    const x1 = mx, y1 = my;
+    const x2 = mx - 110 * sinA, y2 = my + 110 * cosA;
 
-    // Sharp edge is perpendicular to blade direction (right side of swipe = sharp edge)
-    const sharpEdgeX = -bladeDirY;
-    const sharpEdgeY = bladeDirX;
+    // Helper for point-to-segment distance squared
+    const getDistSq = (fx, fy, x_1, y_1, x_2, y_2) => {
+      const dx12 = x_2 - x_1, dy12 = y_2 - y_1;
+      const l2 = dx12 * dx12 + dy12 * dy12;
+      if (l2 === 0) return (fx - x_1) ** 2 + (fy - y_1) ** 2;
+      let t = ((fx - x_1) * dx12 + (fy - y_1) * dy12) / l2;
+      t = Math.max(0, Math.min(1, t));
+      return (fx - (x_1 + t * dx12)) ** 2 + (fy - (y_1 + t * dy12)) ** 2;
+    };
 
     for (let i = 0; i < s.fruits.length; i++) {
       const f = s.fruits[i];
       if (!f.alive || f.sliced) continue;
-      const dx = f.x - mx, dy = f.y - my;
-      const distSq = dx * dx + dy * dy;
-      const hitRadius = f.r * 1.25;
-      if (distSq < hitRadius * hitRadius) {
-        // Check if fruit is on the sharp side of the knife
-        // Dot product with sharp edge direction - fruit should be on the cutting side
-        const dotSharp = dx * sharpEdgeX + dy * sharpEdgeY;
-        // Also check forward direction - fruit should be ahead/near the blade path
-        const dotForward = dx * bladeDirX + dy * bladeDirY;
+      
+      // Check collision against the whole knife length
+      const distSq = getDistSq(f.x, f.y, x1, y1, x2, y2);
+      const hitRadius = f.r * 1.6; // Generous hit radius for better feel
 
-        // Allow cutting if fruit is on the sharp side OR directly in the blade path
-        // The sharp side check ensures the blade's edge contacts the fruit
-        if (Math.abs(dotSharp) < f.r * 1.5 || Math.abs(dotForward) < f.r * 1.0) {
-          f.sliced = true;
-          f.alive = false;
-          emitP(f.x, f.y, f.c, f.i);
-          s.score += s.doubleActive ? 2 : 1;
-          s.combo++;
-          s.comboTimer = 140;
-          if (s.combo >= 3) showComboFn(s.combo);
-          updateUI({ score: s.score });
-        }
+      if (distSq < hitRadius * hitRadius) {
+        f.sliced = true;
+        f.alive = false;
+        emitP(f.x, f.y, f.c, f.i);
+        s.score += s.doubleActive ? 2 : 1;
+        s.combo++;
+        s.comboTimer = 140;
+        if (s.combo >= 3) showComboFn(s.combo);
+        updateUI({ score: s.score });
       }
     }
+
     for (let j = 0; j < s.bombs.length; j++) {
       const b = s.bombs[j];
       if (!b.alive) continue;
-      const bx = b.x - mx, by = b.y - my;
-      if (bx * bx + by * by < (b.r * 1.2) ** 2) {
+      const bDistSq = getDistSq(b.x, b.y, x1, y1, x2, y2);
+      if (bDistSq < (b.r * 1.3) ** 2) {
         b.alive = false;
         emitBomb(b.x, b.y);
         loseLife();
@@ -483,6 +498,20 @@ export default function FruitNinja() {
       p.alpha -= 0.025 / p.life;
     }
 
+    // Continuous collision check for passive cutting (even if mouse isn't moving)
+    if (s.mouseDown) {
+      checkSlice(s.prevX, s.prevY, s.prevX, s.prevY);
+    }
+
+    // UPDATE UNIQUE ANIMATIONS
+    if (s.shake > 0.1) s.shake *= 0.88; else s.shake = 0;
+    if (s.flashAlpha > 0.01) s.flashAlpha *= 0.92; else s.flashAlpha = 0;
+    for (const sw of s.shockwaves) {
+      sw.r += 15;
+      sw.a *= 0.88;
+    }
+    s.shockwaves = s.shockwaves.filter(sw => sw.a > 0.01);
+
     if (s.comboTimer > 0) { s.comboTimer -= dt; if (s.comboTimer <= 0) s.combo = 0; }
     if (s.freezeTimer > 0) {
       s.freezeTimer -= dt;
@@ -502,10 +531,29 @@ export default function FruitNinja() {
     s.bombs = s.bombs.filter((b) => b.alive);
     s.particles = s.particles.filter((p) => p.alpha > 0);
 
+    // DRAWING WITH EFFECTS
+    ctx.save();
+    
+    // Apply Shake
+    if (s.shake > 0) {
+      ctx.translate((Math.random() - 0.5) * s.shake, (Math.random() - 0.5) * s.shake);
+    }
+
     drawBG(ctx);
     drawTrail(ctx);
+    
+    // Draw Shockwaves
+    for (const sw of s.shockwaves) {
+      ctx.beginPath();
+      ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${sw.a * 0.5})`;
+      ctx.lineWidth = 10 * sw.a;
+      ctx.stroke();
+    }
+
     for (const f of s.fruits) drawFruit(ctx, f);
     for (const b of s.bombs) drawBomb(ctx, b);
+    
     for (const pt of s.particles) {
       if (pt.alpha <= 0) continue;
       ctx.save();
@@ -513,10 +561,24 @@ export default function FruitNinja() {
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, Math.max(0.5, pt.r), 0, Math.PI * 2);
       ctx.fillStyle = pt.color;
+      // Add glow for bomb sparks
+      if (pt.isSpark) {
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = pt.color;
+      }
       ctx.fill();
       ctx.restore();
     }
+    
     drawKnife(ctx);
+
+    // Screen Flash
+    if (s.flashAlpha > 0) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${s.flashAlpha})`;
+      ctx.fillRect(0, 0, s.W, s.H);
+    }
+
+    ctx.restore();
   }, [drawBG, drawTrail, drawFruit, drawBomb, spawnFruit, spawnBomb, loseLife, updateUI, drawKnife]);
 
   const startGame = useCallback(() => {
@@ -535,6 +597,9 @@ export default function FruitNinja() {
     s.bombs = [];
     s.particles = [];
     s.bladeTrail = [];
+    s.shockwaves = [];
+    s.shake = 0;
+    s.flashAlpha = 0;
     s.mouseDown = false;
     s.prevX = -1;
     s.prevY = -1;
