@@ -1,7 +1,11 @@
 {
   "cleanUrls": true,
+  "trailingSlash": false,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
@@ -22,7 +26,7 @@
       ]
     },
     {
-      "source": "/(assets|wood.png|bg.png|manifest.json|sitemap.xml|robots.txt)",
+      "source": "/(assets/.*|wood.png|bg.png|manifest.json|sitemap.xml|robots.txt)",
       "headers": [
         {
           "key": "Cache-Control",

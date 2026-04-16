@@ -3,27 +3,44 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <link rel="icon" type="image/png" href="/wood.png" />
   <meta name="description"
     content="Play the ultimate Fruit Ninja game online! Slice through juicy fruits, dodge bombs, and aim for the high score in this fast-paced, high-performance web game. Free to play, mobile friendly." />
   <meta name="theme-color" content="#2b1a0a" />
   <meta name="keywords" content="Fruit Ninja, slicing game, fruit cutting, web game, casual game, React game" />
   <meta name="author" content="Fruit Cutting Game" />
+  <meta name="robots" content="index, follow" />
+
+  <!-- Open Graph -->
   <meta property="og:title" content="Fruit Cutting - The Ultimate Slicing Game" />
-  <meta property="og:description" content="Slice through juicy fruits and avoid bombs in this addictive web game. High performance, 60fps experience." />
+  <meta property="og:description"
+    content="Slice through juicy fruits and avoid bombs in this addictive web game. High performance, 60fps experience." />
   <meta property="og:type" content="website" />
-  <meta property="og:image" content="/wood.png" />
-  <link rel="canonical" href="https://fruit-cutting.example.com" />
+  <meta property="og:url" content="https://fruit-cutting.vercel.app/" />
+  <meta property="og:image" content="https://fruit-cutting.vercel.app/wood.png" />
+  <meta property="og:site_name" content="Fruit Cutting Game" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Fruit Cutting - The Ultimate Slicing Game" />
+  <meta name="twitter:description" content="Slice through juicy fruits and avoid bombs in this addictive web game." />
+  <meta name="twitter:image" content="https://fruit-cutting.vercel.app/wood.png" />
+
+  <link rel="canonical" href="https://fruit-cutting.vercel.app/" />
   <link rel="manifest" href="/manifest.json" />
   <title>Fruit Cutting - The Ultimate Slicing Game</title>
-  <link rel="preload" as="image" href="/wood.png" fetchpriority="high" />
+
+  <!-- Structured Data -->
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       "name": "Fruit Cutting Game",
+      "url": "https://fruit-cutting.vercel.app/",
       "operatingSystem": "Web",
       "applicationCategory": "GameApplication",
+      "description": "Play the ultimate Fruit Ninja game online! Slice through juicy fruits, dodge bombs, and aim for high scores.",
       "offers": {
         "@type": "Offer",
         "price": "0",
@@ -36,10 +53,24 @@
       }
     }
   </script>
+
+  <!-- Critical CSS inlined for faster first paint -->
+  <style>
+    body { margin: 0; background-color: #2b1a0a; }
+    #root { width: 100%; height: 100vh; }
+  </style>
 </head>
 
-<body style="background-color: #2b1a0a;">
+<body>
   <div id="root"></div>
+  <noscript>
+    <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#2b1a0a;color:#fff;font-family:Arial,sans-serif;text-align:center;padding:20px;">
+      <div>
+        <h1 style="font-size:2rem;margin-bottom:1rem;">Fruit Cutting Game</h1>
+        <p>You need to enable JavaScript to play this game.</p>
+      </div>
+    </div>
+  </noscript>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 

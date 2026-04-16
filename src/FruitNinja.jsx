@@ -14,13 +14,9 @@ const FRUITS = [
 ];
 
 const FLOAT_FRUITS = [
-  { e: "🍉", l: "5%", d: "12s", delay: "0s" },
-  { e: "🍊", l: "18%", d: "9s", delay: "2s" },
-  { e: "🍋", l: "33%", d: "15s", delay: "4s", big: true },
-  { e: "🍎", l: "52%", d: "10s", delay: "1s" },
-  { e: "🍇", l: "68%", d: "13s", delay: "3s" },
-  { e: "🍓", l: "82%", d: "8s", delay: "5s" },
-  { e: "🍑", l: "93%", d: "11s", delay: "1.5s" },
+  { e: "🍉", l: "10%", d: "12s", delay: "0s" },
+  { e: "🍎", l: "45%", d: "10s", delay: "1s" },
+  { e: "🍋", l: "78%", d: "14s", delay: "2s" },
 ];
 
 export default function FruitNinja() {
@@ -53,6 +49,8 @@ export default function FruitNinja() {
     stars: [],
     bgImg: null,
     bladeAngle: -Math.PI / 4,
+    bgCacheCanvas: null,
+    bgCacheDirty: true,
   });
 
   const [uiState, setUiState] = useState({
@@ -90,7 +88,8 @@ export default function FruitNinja() {
 
   const emitP = useCallback((x, y, c1, c2) => {
     const s = stateRef.current;
-    for (let i = 0; i < 20; i++) {
+    const count = Math.min(12, 150 - s.particles.length);
+    for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = 2 + Math.random() * 8;
       s.particles.push({
@@ -107,7 +106,8 @@ export default function FruitNinja() {
 
   const emitBomb = useCallback((x, y) => {
     const s = stateRef.current;
-    for (let i = 0; i < 28; i++) {
+    const count = Math.min(16, 150 - s.particles.length);
+    for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = 4 + Math.random() * 10;
       s.particles.push({
@@ -151,28 +151,49 @@ export default function FruitNinja() {
   const checkSlice = useCallback((mx, my, px, py) => {
     const s = stateRef.current;
     if (!s.mouseDown || px < 0) return;
-    if (Math.sqrt((mx - px) ** 2 + (my - py) ** 2) < 2) return;
+    const swipeDist = Math.sqrt((mx - px) ** 2 + (my - py) ** 2);
+    if (swipeDist < 2) return;
+
+    // Blade direction (swipe vector)
+    const bladeDirX = (mx - px) / swipeDist;
+    const bladeDirY = (my - py) / swipeDist;
+
+    // Sharp edge is perpendicular to blade direction (right side of swipe = sharp edge)
+    const sharpEdgeX = -bladeDirY;
+    const sharpEdgeY = bladeDirX;
 
     for (let i = 0; i < s.fruits.length; i++) {
       const f = s.fruits[i];
       if (!f.alive || f.sliced) continue;
       const dx = f.x - mx, dy = f.y - my;
-      if (Math.sqrt(dx * dx + dy * dy) < f.r * 1.25) {
-        f.sliced = true;
-        f.alive = false;
-        emitP(f.x, f.y, f.c, f.i);
-        s.score += s.doubleActive ? 2 : 1;
-        s.combo++;
-        s.comboTimer = 140;
-        if (s.combo >= 3) showComboFn(s.combo);
-        updateUI({ score: s.score });
+      const distSq = dx * dx + dy * dy;
+      const hitRadius = f.r * 1.25;
+      if (distSq < hitRadius * hitRadius) {
+        // Check if fruit is on the sharp side of the knife
+        // Dot product with sharp edge direction - fruit should be on the cutting side
+        const dotSharp = dx * sharpEdgeX + dy * sharpEdgeY;
+        // Also check forward direction - fruit should be ahead/near the blade path
+        const dotForward = dx * bladeDirX + dy * bladeDirY;
+
+        // Allow cutting if fruit is on the sharp side OR directly in the blade path
+        // The sharp side check ensures the blade's edge contacts the fruit
+        if (Math.abs(dotSharp) < f.r * 1.5 || Math.abs(dotForward) < f.r * 1.0) {
+          f.sliced = true;
+          f.alive = false;
+          emitP(f.x, f.y, f.c, f.i);
+          s.score += s.doubleActive ? 2 : 1;
+          s.combo++;
+          s.comboTimer = 140;
+          if (s.combo >= 3) showComboFn(s.combo);
+          updateUI({ score: s.score });
+        }
       }
     }
     for (let j = 0; j < s.bombs.length; j++) {
       const b = s.bombs[j];
       if (!b.alive) continue;
       const bx = b.x - mx, by = b.y - my;
-      if (Math.sqrt(bx * bx + by * by) < b.r * 1.2) {
+      if (bx * bx + by * by < (b.r * 1.2) ** 2) {
         b.alive = false;
         emitBomb(b.x, b.y);
         loseLife();
@@ -182,9 +203,18 @@ export default function FruitNinja() {
   }, [emitP, emitBomb, loseLife, showComboFn, updateUI]);
 
   const drawBG = useCallback((ctx) => {
-    const { W, H, bgImg } = stateRef.current;
+    const s = stateRef.current;
+    const { W, H, bgImg } = s;
+
+    // Cache background on offscreen canvas for performance
     if (bgImg && bgImg.complete) {
-      ctx.drawImage(bgImg, 0, 0, W, H);
+      if (s.bgCacheDirty || !s.bgCacheCanvas || s.bgCacheCanvas.width !== W || s.bgCacheCanvas.height !== H) {
+        s.bgCacheCanvas = new OffscreenCanvas(W, H);
+        const bgCtx = s.bgCacheCanvas.getContext('2d');
+        bgCtx.drawImage(bgImg, 0, 0, W, H);
+        s.bgCacheDirty = false;
+      }
+      ctx.drawImage(s.bgCacheCanvas, 0, 0);
     } else {
       ctx.fillStyle = "#2b1a0a";
       ctx.fillRect(0, 0, W, H);
@@ -408,7 +438,7 @@ export default function FruitNinja() {
   const gameLoop = useCallback((ts) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
     const s = stateRef.current;
     if (s.gameState !== "playing") return;
 
@@ -526,17 +556,35 @@ export default function FruitNinja() {
   }, []);
 
   useEffect(() => {
-    const img = new Image();
-    img.src = "/wood.png";
-    img.onload = () => {
-      stateRef.current.bgImg = img;
-    };
     resizeCanvas();
-    window.addEventListener("resize", resizeCanvas);
-    document.addEventListener("fullscreenchange", resizeCanvas);
+
+    // Defer wood.png loading to AFTER initial paint for better FCP/LCP
+    const loadBg = () => {
+      const img = new Image();
+      img.decoding = "async";
+      img.src = "/wood.png";
+      img.onload = () => {
+        stateRef.current.bgImg = img;
+        stateRef.current.bgCacheDirty = true;
+      };
+    };
+
+    // Use requestIdleCallback if available, otherwise setTimeout
+    if (typeof requestIdleCallback !== "undefined") {
+      requestIdleCallback(loadBg, { timeout: 2000 });
+    } else {
+      setTimeout(loadBg, 100);
+    }
+
+    const onResize = () => {
+      stateRef.current.bgCacheDirty = true;
+      resizeCanvas();
+    };
+    window.addEventListener("resize", onResize);
+    document.addEventListener("fullscreenchange", onResize);
     return () => {
-      window.removeEventListener("resize", resizeCanvas);
-      document.removeEventListener("fullscreenchange", resizeCanvas);
+      window.removeEventListener("resize", onResize);
+      document.removeEventListener("fullscreenchange", onResize);
     };
   }, [resizeCanvas]);
 
@@ -646,7 +694,9 @@ export default function FruitNinja() {
         }
         .float-fruit {
           position: absolute; font-size: 52px; opacity: 0.12;
-          pointer-events: none; animation: rise linear infinite;
+          pointer-events: none; will-change: transform;
+          animation: rise linear infinite;
+          contain: strict;
         }
         .heart {
           width: 24px; height: 24px; background: #ff3333;
@@ -663,14 +713,14 @@ export default function FruitNinja() {
         .portrait-overlay {
           display: none; box-sizing: border-box;
           position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-          background: #000; z-index: 9999; color: white;
+          background: #000; z-index: 60; color: white;
           align-items: center; justify-content: center; flex-direction: column;
           text-align: center; padding: 20px;
         }
         .portrait-overlay p {
           max-width: 90vw; word-wrap: break-word; font-size: 1.2rem; line-height: 1.5; margin: 0;
         }
-        @media screen and (orientation: portrait) and (max-width: 900px) {
+        @media screen and (orientation: portrait) and (max-width: 600px) {
           .portrait-overlay { display: flex; }
         }
       `}</style>
@@ -688,6 +738,8 @@ export default function FruitNinja() {
           position: "absolute", top: 0, left: 0,
           width: "100%", height: "100%",
           display: "block", cursor: uiState.screen === "playing" ? "none" : "crosshair", zIndex: 1,
+          willChange: "contents",
+          imageRendering: "auto",
         }}
       />
 
@@ -757,7 +809,7 @@ export default function FruitNinja() {
       {screen === "start" && (
         <div style={{
           position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
-          background: "linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.4)), url('/wood.png') no-repeat center center / cover",
+          background: "url('/wood.png') center / cover no-repeat",
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center", zIndex: 50,
         }}>
