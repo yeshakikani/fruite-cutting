@@ -115,6 +115,11 @@ export default function FruitNinja() {
     s.flashAlpha = 0.7; // Screen flash
     s.shockwaves.push({ x, y, r: 10, a: 1 }); // Expansion shockwave
 
+    // Device Vibration (Haptic Feedback)
+    if (window.navigator.vibrate) {
+      window.navigator.vibrate([300, 100, 400]); // Pattern: long-pause-longer
+    }
+
     // Explosion Particles (Embers & Sparks)
     const count = 35;
     for (let i = 0; i < count; i++) {
